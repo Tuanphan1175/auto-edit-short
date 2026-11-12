@@ -19,6 +19,8 @@ MODEL = ROOT / "models" / "rvm_mobilenetv3_fp32.torchscript"
 def _device():
     import torch
 
+    if torch.cuda.is_available():
+        return "cuda", torch.jit.load(str(MODEL), map_location="cuda").eval()
     if torch.backends.mps.is_available():
         try:
             m = torch.jit.load(str(MODEL), map_location="mps").eval()

@@ -13,6 +13,7 @@ OUTPUT = ROOT / "output"
 CONFIG = ROOT / "config"
 FPS = 30
 W, H = 1080, 1920
+FACE_H = 560
 
 
 def workdir(name: str) -> Path:

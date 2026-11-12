@@ -18,8 +18,41 @@
     "Chat GPT": "ChatGPT",
     "Gemi nai": "Gemini",
     "tô ken": "token",
-    "Py thon": "Python"
+    "Py thon": "Python",
+    "tô cừn": "token",
+    "tô cần": "token",
+    "tô kần": "token",
+    "kép cắt": "CapCut",
+    "cáp cát": "CapCut",
+    "kép cát": "CapCut",
+    "vi đê ô": "video",
+    "e đít": "edit",
+    "vết mủ": "vết mổ"
   },
-  "fillers": ["ừm", "ừ", "ưm", "hừm", "à", "ờ", "ơ", "ạ ờ", "um", "uh", "uhm", "hmm", "ừa"],
-  "prompt_terms": ["Claude Code", "CapCut", "HyperFrames", "FFmpeg", "Whisper", "token", "AI", "skill", "edit video"]
+  "fillers": [
+    "ừm",
+    "ừ",
+    "ưm",
+    "hừm",
+    "à",
+    "ờ",
+    "ơ",
+    "ạ ờ",
+    "um",
+    "uh",
+    "uhm",
+    "hmm",
+    "ừa"
+  ],
+  "prompt_terms": [
+    "Claude Code",
+    "CapCut",
+    "HyperFrames",
+    "FFmpeg",
+    "Whisper",
+    "token",
+    "AI",
+    "skill",
+    "edit video"
+  ]
 }

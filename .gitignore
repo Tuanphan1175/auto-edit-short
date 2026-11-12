@@ -21,3 +21,14 @@ work/*
 !work/short12/
 work/short12/*
 !work/short12/*.json
+.tmp/
+
+# secrets / local Studio settings / b-roll videos
+.env
+.env.*
+config/studio.json
+media/broll/
+
+# logs / review renders
+debug.log
+samples/*-review-*.mp4

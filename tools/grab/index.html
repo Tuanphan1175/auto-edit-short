@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grab — tải video mẫu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f4efe4; --ink: #141210; --muted: #6b645a; --line: #d9d0bf;
+  --card: #fffaf0; --accent: #ffd400; --accent-ink: #141210; --ok: #1f8a4c; --err: #c4361b;
+  --radius: 18px; --ease: cubic-bezier(.16,1,.3,1);
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #12110f; --ink: #f4efe4; --muted: #a39b8d; --line: #2c2924; --card: #1b1916; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Be Vietnam Pro", system-ui, sans-serif; }
+.wrap { max-width: 960px; margin: 0 auto; padding: 40px 16px 80px; }
+header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 36px; }
+.logo { font-weight: 900; font-size: 22px; letter-spacing: -.02em; }
+.logo b { background: var(--accent); color: var(--accent-ink); padding: 0 8px; border-radius: 6px; margin-left: 2px; }
+.where { color: var(--muted); font-size: 13px; }
+h1 { font-size: clamp(38px, 7vw, 76px); line-height: .95; letter-spacing: -.04em; margin: 0 0 14px; font-weight: 900; }
+h1 em { font-style: normal; background: linear-gradient(transparent 58%, var(--accent) 58% 92%, transparent 92%); }
+.lead { color: var(--muted); max-width: 560px; margin: 0 0 28px; font-size: 16px; line-height: 1.55; }
+.bar { display: flex; gap: 8px; background: var(--card); border: 2px solid var(--ink); border-radius: var(--radius);
+  padding: 8px; box-shadow: 6px 6px 0 var(--ink); }
+.bar input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 17px; padding: 12px; outline: none; }
+button { font: inherit; cursor: pointer; border-radius: 12px; border: 2px solid var(--ink); transition: transform .15s var(--ease), box-shadow .15s var(--ease); }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.btn { background: var(--accent); color: var(--accent-ink); font-weight: 700; padding: 12px 22px; }
+.btn:hover { transform: translate(-2px,-2px); box-shadow: 3px 3px 0 var(--ink); }
+.btn:active { transform: none; box-shadow: none; }
+.btn:disabled { opacity: .5; cursor: wait; transform: none; box-shadow: none; }
+.ghost { background: transparent; color: var(--ink); padding: 12px 16px; font-weight: 500; }
+.chips-plat { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; color: var(--muted); font-size: 13px; }
+.chips-plat span { border: 1px solid var(--line); border-radius: 99px; padding: 4px 10px; }
+.msg { margin-top: 14px; font-size: 14px; min-height: 20px; }
+.msg.err { color: var(--err); }
+
+.result { display: none; margin-top: 34px; background: var(--card); border: 2px solid var(--ink); border-radius: var(--radius);
+  overflow: hidden; grid-template-columns: 300px 1fr; animation: rise .5s var(--ease); }
+.result.show { display: grid; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+.thumb { background: #000 center/cover no-repeat; min-height: 220px; position: relative; }
+.thumb .dur { position: absolute; right: 10px; bottom: 10px; background: rgba(0,0,0,.75); color: #fff; font-size: 13px; padding: 3px 8px; border-radius: 6px; }
+.thumb .tag { position: absolute; left: 10px; top: 10px; background: var(--accent); color: #141210; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px; }
+.info { padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+.info h2 { margin: 0; font-size: 20px; line-height: 1.3; }
+.info .by { color: var(--muted); font-size: 14px; margin-top: 4px; }
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 8px; font-weight: 700; }
+.opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.opt { background: transparent; color: var(--ink); padding: 8px 14px; border-width: 1.5px; border-color: var(--line); font-weight: 500; }
+.opt[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.opt:hover { border-color: var(--ink); }
+.row { display: grid; grid-template-columns: 1fr 110px 110px; gap: 10px; }
+.field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.field input { font: inherit; font-size: 15px; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink);
+  background: var(--bg); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px; outline: none; }
+.field input:focus { border-color: var(--ink); }
+
+section.panel { margin-top: 48px; }
+section.panel h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin: 0 0 12px;
+  border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+.job, .file { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.job .t, .file .t { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job .s { font-size: 13px; color: var(--muted); }
+.job.done .s { color: var(--ok); } .job.error .s { color: var(--err); }
+.prog { grid-column: 1 / -1; height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.prog i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s var(--ease); }
+.file .meta { font-size: 13px; color: var(--muted); }
+.file .acts { display: flex; gap: 6px; }
+.small { padding: 6px 10px; font-size: 13px; border-width: 1.5px; background: transparent; color: var(--ink); }
+.empty { color: var(--muted); font-size: 14px; padding: 14px 0; }
+.player { margin-top: 12px; display: none; }
+.player.show { display: block; }
+.player video, .player audio { width: 100%; max-height: 520px; border-radius: 12px; background: #000; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(80px); background: var(--ink); color: var(--bg);
+  padding: 10px 16px; border-radius: 10px; font-size: 14px; transition: transform .3s var(--ease); }
+.toast.show { transform: translateX(-50%) translateY(0); }
+@media (max-width: 720px) {
+  .result.show { grid-template-columns: 1fr; }
+  .row { grid-template-columns: 1fr 1fr; } .row .field:first-child { grid-column: 1 / -1; }
+  .bar { flex-wrap: wrap; } .bar input { flex-basis: 100%; }
+  .bar .btn { flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">Grab<b>.</b></div>
+    <div class="where">Lưu vào <code>input/</code> · chạy trên máy anh</div>
+  </header>
+
+  <main>
+    <h1>Dán link.<br>Lấy <em>video mẫu</em>.</h1>
+    <p class="lead">Tải video từ YouTube, Shorts, TikTok, Facebook, Instagram. Chọn chất lượng, cắt đúng đoạn cần, đặt tên sẵn để đưa thẳng vào auto-edit.</p>
+
+    <form class="bar" id="form" autocomplete="off">
+      <input id="url" type="url" placeholder="https://www.youtube.com/shorts/…" aria-label="Link video" required>
+      <button type="button" class="ghost" id="paste">Dán</button>
+      <button type="submit" class="btn" id="go">Lấy thông tin</button>
+    </form>
+    <div class="chips-plat"><span>YouTube</span><span>Shorts</span><span>TikTok</span><span>Facebook</span><span>Instagram</span><span>X</span><span>+1000 trang khác</span></div>
+    <div class="msg" id="msg" role="status"></div>
+
+    <article class="result" id="result" aria-live="polite">
+      <div class="thumb" id="thumb"><span class="tag" id="tag"></span><span class="dur" id="dur"></span></div>
+      <div class="info">
+        <div><h2 id="title"></h2><div class="by" id="by"></div></div>
+        <div>
+          <div class="label">Định dạng</div>
+          <div class="opts" id="formats"></div>
+        </div>
+        <div class="row">
+          <label class="field">Tên file<input id="name" spellcheck="false"></label>
+          <label class="field">Từ (mm:ss)<input id="start" placeholder="0:00"></label>
+          <label class="field">Đến<input id="end" placeholder="hết"></label>
+        </div>
+        <div><button class="btn" id="dl">Tải về</button></div>
+      </div>
+    </article>
+
+    <section class="panel"><h3>Đang tải</h3><div id="jobs"><div class="empty">Chưa có gì.</div></div></section>
+    <section class="panel"><h3>Thư viện · input/</h3><div id="files"></div><div class="player" id="player"></div></section>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { info: null, choice: { kind: "video", height: 1080 }, jobs: {} };
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmtDur = (s) => { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
+const fmtSize = (b) => b > 1e9 ? (b / 1e9).toFixed(2) + " GB" : (b / 1e6).toFixed(1) + " MB";
+function toast(t) { const el = $("toast"); el.textContent = t; el.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("show"), 2200); }
+function msg(t, err) { $("msg").textContent = t || ""; $("msg").className = "msg" + (err ? " err" : ""); }
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : undefined);
+  const data = await r.json();
+  if (!r.ok || data.error) throw new Error(data.error || r.statusText);
+  return data;
+}
+
+$("paste").onclick = async () => {
+  try { $("url").value = (await navigator.clipboard.readText()).trim(); $("form").requestSubmit(); }
+  catch { toast("Trình duyệt chặn đọc clipboard — dán bằng Ctrl+V"); $("url").focus(); }
+};
+
+$("form").onsubmit = async (e) => {
+  e.preventDefault();
+  $("go").disabled = true; msg("Đang đọc link…"); $("result").classList.remove("show");
+  try {
+    const info = await api("/api/info", { url: $("url").value.trim() });
+    state.info = info; renderInfo(info); msg("");
+  } catch (err) { msg(err.message, true); }
+  finally { $("go").disabled = false; }
+};
+
+function renderInfo(info) {
+  $("thumb").style.backgroundImage = info.thumbnail ? `url("${info.thumbnail.replace(/"/g, "%22")}")` : "";
+  $("tag").textContent = info.platform + (info.vertical ? " · dọc 9:16" : "");
+  $("dur").textContent = fmtDur(info.duration);
+  $("title").textContent = info.title;
+  $("by").textContent = info.uploader;
+  $("name").value = info.suggested_name;
+  $("start").value = ""; $("end").value = "";
+  const heights = info.heights.length ? info.heights : [1080];
+  const opts = heights.map((h) => ({ kind: "video", height: h, label: `MP4 ${h}p` })).concat({ kind: "audio", label: "MP3 · chỉ âm thanh" });
+  const best = opts.find((o) => o.kind === "video" && o.height <= 1920 && o.height >= 1080) || opts[0];
+  state.choice = best;
+  $("formats").innerHTML = "";
+  opts.forEach((o) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "opt"; b.textContent = o.label;
+    b.setAttribute("aria-pressed", o === best);
+    b.onclick = () => { state.choice = o; [...$("formats").children].forEach((c) => c.setAttribute("aria-pressed", c === b)); };
+    $("formats").appendChild(b);
+  });
+  $("result").classList.add("show");
+}
+
+$("dl").onclick = async () => {
+  if (!state.info) return;
+  try {
+    const { id } = await api("/api/download", {
+      url: $("url").value.trim(), title: state.info.title, name: $("name").value.trim() || state.info.suggested_name,
+      kind: state.choice.kind, height: state.choice.height, start: $("start").value.trim(), end: $("end").value.trim(),
+    });
+    state.jobs[id] = { id, title: state.info.title, progress: 0, stage: "Đang tải…", status: "running" };
+    renderJobs(); poll(id); toast("Đã thêm vào hàng tải");
+  } catch (err) { msg(err.message, true); }
+};
+
+async function poll(id) {
+  try { state.jobs[id] = await api("/api/job/" + id); } catch { return; }
+  renderJobs();
+  if (state.jobs[id].status === "running") setTimeout(() => poll(id), 700);
+  else if (state.jobs[id].status === "done") { loadFiles(); toast("Xong: " + state.jobs[id].file); }
+}
+
+function renderJobs() {
+  const list = Object.values(state.jobs).reverse();
+  $("jobs").innerHTML = list.length ? list.map((j) => `
+    <div class="job ${j.status}">
+      <div class="t">${esc(j.title)}</div>
+      <div class="s">${j.status === "running" ? `${j.progress}% ${esc(j.speed || "")} ${j.eta ? "· còn " + esc(j.eta) : ""}` : j.status === "done" ? "✓ " + esc(j.file) : "✗ " + esc(j.error || "")}</div>
+      <div class="prog"><i style="width:${j.status === "error" ? 0 : j.progress}%"></i></div>
+      ${j.status === "running" ? `<div class="s" style="grid-column:1/-1">${esc(j.stage)}</div>` : ""}
+    </div>`).join("") : '<div class="empty">Chưa có gì.</div>';
+}
+
+async function loadFiles() {
+  const files = await api("/api/files");
+  $("files").innerHTML = files.length ? files.map((f) => `
+    <div class="file">
+      <div><div class="t">${esc(f.name)}</div><div class="meta">${fmtSize(f.size)}</div></div>
+      <div class="acts">
+        <button class="small" data-play="${esc(f.name)}">Xem</button>
+        ${f.name.endsWith(".mp4") ? `<button class="small" data-cmd="${esc(f.stem)}">Lệnh auto-edit</button>` : ""}
+      </div>
+    </div>`).join("") : '<div class="empty">input/ đang trống.</div>';
+}
+
+$("files").onclick = async (e) => {
+  const play = e.target.dataset.play, cmd = e.target.dataset.cmd;
+  if (play) {
+    const src = "/file/" + encodeURIComponent(play), tag = play.endsWith(".mp3") ? "audio" : "video";
+    $("player").innerHTML = `<${tag} src="${src}" controls autoplay></${tag}>`;
+    $("player").classList.add("show"); $("player").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  if (cmd) {
+    const text = `python -m autoedit transcribe input/${cmd}.mp4`;
+    try { await navigator.clipboard.writeText(text); toast("Đã copy: " + text); } catch { toast(text); }
+  }
+};
+
+loadFiles();
+</script>
+</body>
+</html>

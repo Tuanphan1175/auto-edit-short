@@ -13,10 +13,13 @@ import re
 import subprocess
 from pathlib import Path
 
-from .common import FPS, H, ROOT, W, load, norm, run, save
+from .common import FACE_H, FPS, H, ROOT, W, load, norm, run, save
+
+# Explicit font: FFmpeg builds without fontconfig (e.g. Windows) cannot pick a default for drawtext.
+# In a filter string ':' must be escaped, so 'E:/x' becomes 'E\:/x'.
+QA_FONT = (ROOT / "media" / "fonts" / "BeVietnamPro-Bold.ttf").as_posix().replace(":", r"\:")
 
 FACE_HALF_W = 230
-FACE_H = 560
 
 
 def probe(path: Path) -> dict:
@@ -40,7 +43,7 @@ def sheet(video: Path, times: list[float], dst: Path, cols: int = 5) -> None:
         f.unlink()
     for k, t in enumerate(times):
         run(["ffmpeg", "-v", "error", "-y", "-ss", f"{max(0, t):.3f}", "-i", str(video), "-frames:v", "1",
-             "-vf", f"scale=270:480,drawtext=text='{t:.2f}s':x=8:y=8:fontsize=22:fontcolor=yellow:box=1:boxcolor=black@0.6",
+             "-vf", f"scale=270:480,drawtext=fontfile='{QA_FONT}':text='{t:.2f}s':x=8:y=8:fontsize=22:fontcolor=yellow:box=1:boxcolor=black@0.6",
              str(tmp / f"{k:03d}.jpg")])
     rows = (len(times) + cols - 1) // cols
     run(["ffmpeg", "-v", "error", "-y", "-framerate", "1", "-i", str(tmp / "%03d.jpg"), "-vf",

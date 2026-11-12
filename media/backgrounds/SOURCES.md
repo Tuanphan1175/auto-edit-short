@@ -7,3 +7,5 @@
 
 - capcut.svg — Wikimedia Commons Capcut-icon.svg (public domain per Commons)
 - ffmpeg.svg, openai.svg, claude.svg, anthropic.svg — simple-icons@15.0.0 (official brand marks)
+
+- photo_2026_09_13_07_12_12.jpg — ảnh người dùng tải lên qua Studio (2026-11-10), blur

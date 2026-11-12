@@ -15,10 +15,12 @@ from pathlib import Path
 
 from PIL import ImageFont
 
-from .common import FPS, H, ROOT, W, load, run, save
+from .common import FACE_H, FPS, H, ROOT, W, load, run, save
+from .broll import build_layer as broll_layer
 from .plan import scenes_of
+from .settings import background_for, effective_style, load_settings
 
-GSAP = "https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"
+GSAP = "assets/gsap.min.js"
 LOGO_COLORS = {"claude": "#D97757", "ffmpeg": "#007808", "openai": "#111111", "anthropic": "#191919"}
 
 
@@ -68,13 +70,18 @@ def _logo_file(name: str) -> Path:
     return hits[0]
 
 
-def copy_assets(wd: Path, hf: Path, plan: dict, style: dict) -> None:
+def copy_assets(wd: Path, hf: Path, plan: dict, style: dict, background: str) -> None:
     a = hf / "assets"
     (a / "fonts").mkdir(parents=True, exist_ok=True)
     (a / "logos").mkdir(parents=True, exist_ok=True)
+    vendor = ROOT / "node_modules" / "hyperframes" / "dist" / "vendor" / "npm"
+    gsap = next(vendor.glob("gsap@*/dist/gsap.min.js"), None)
+    if gsap is None:
+        raise FileNotFoundError("HyperFrames bundled GSAP is missing. Run npm ci in the project directory.")
+    shutil.copy2(gsap, hf / GSAP)
     for p in style["fonts"].values():
         shutil.copy2(ROOT / p, a / "fonts" / Path(p).name)
-    shutil.copy2(ROOT / plan["background"], a / "background.jpg")
+    shutil.copy2(ROOT / background, a / "background.jpg")
     if not (a / "person.webm").exists() or (a / "person.webm").stat().st_mtime < (wd / "person.webm").stat().st_mtime:
         shutil.copy2(wd / "person.webm", a / "person.webm")
     run(["ffmpeg", "-v", "error", "-y", "-i", str(wd / "cut.mp4"), "-vn", "-c:a", "copy", str(a / "voice.m4a")])
@@ -124,6 +131,9 @@ def build_captions(words, scenes, geo, style, D) -> tuple[str, list[dict]]:
     fam = style["font_family"]
     groups = caption_groups(words, cs["words_per_group"])
     shift = style["split_shift"]
+    # Keep captions below the face while the presenter moves between layouts.
+    moving = [(b["t"] - 0.15, b["t"] + 0.45) for a, b in zip(scenes, scenes[1:])
+              if {a["layout"], b["layout"]} == {"normal", "split"}]
     divs, js, boxes = [], [], []
     for gi, g in enumerate(groups):
         start = 0.12 if gi == 0 else max(g[0]["start"] - 0.05, boxes[-1]["end"])
@@ -135,7 +145,10 @@ def build_captions(words, scenes, geo, style, D) -> tuple[str, list[dict]]:
         h = int((asc + desc) * 1.05)
         mid = start + min(0.25, (end - start) / 2)
         lay = next((s["layout"] for s in scenes if s["t"] <= mid < s["end"]), "normal")
-        if lay == "split":
+        if any(start < stop and end > begin for begin, stop in moving):
+            face_bottom = geo(start, end)["top"] + shift + 40 + FACE_H
+            top = max(cs["y_fullscreen"] - h / 2, face_bottom + cs["gap_above_head"])
+        elif lay == "split":
             hg = geo(start, end)
             bottom = min(cs["y_split_max"] + h / 2, hg["top"] + shift - cs["gap_above_head"])
             top = bottom - h
@@ -185,6 +198,29 @@ def build_captions(words, scenes, geo, style, D) -> tuple[str, list[dict]]:
     return doc, boxes
 
 
+HT_PAD = 0.02  # breathing room (x font size) around the inked glyphs of each head-text line
+
+
+def _ink_extent(text: str, size: int) -> tuple[float, float]:
+    """Pixels the inked glyphs reach above / below the baseline, Vietnamese marks (Ố, Ạ) included."""
+    _, top, _, bottom = _font("900", size).getbbox(text, anchor="ls")
+    return float(-top), float(max(bottom, 0))
+
+
+def _tight_box(baseline: float, head: float, asc: int, desc: int) -> tuple[float, float]:
+    """(top, line-height) of a one-line box whose baseline sits `head` px below its top.
+
+    CSS centres the font's ascent+descent inside the line-height, so baseline = top + (L - asc - desc) / 2 + asc,
+    which fixes L = 2 * head - asc + desc and puts the box bottom head - asc + desc below the baseline.
+    """
+    return baseline - head, 2 * head - asc + desc
+
+
+def _ht_color(v: str, colors: dict) -> str:
+    """Head-text colours in style.json may name a palette entry ("accent") or be a literal CSS colour."""
+    return colors.get(v, v)
+
+
 # --------------------------------------------------------------------------- motion graphics
 def _logo_tile(name: str, size: int) -> str:
     f = _logo_file(name)
@@ -207,7 +243,10 @@ def mg_scene(sid: str, sc: dict, style: dict, area: tuple[int, int], exit_kind: 
     if tpl in ("list", "steps"):
         items = mg["items"]
         n = len(items)
-        title_size = 64 if lay == "split" else 84
+        # Shrink to one line: a wrapped title runs into the first row (split card 1000 px, fullscreen 1080 px,
+        # minus the title's 60 px side margins and a little slack for the text shadow).
+        title_w = (1000 if lay == "split" else 1080) - 120 - 24
+        title_size = fit(mg["title"], "900", 64 if lay == "split" else 84, 40, title_w)
         row_h = min(120, int((bottom - top - title_size - 110) / max(1, n)))
         y = 36
         body.append(f'<div class="mg-title" id="{sid}-title" style="top:{y}px;font-size:{title_size}px">{esc(mg["title"])}</div>')
@@ -233,7 +272,7 @@ def mg_scene(sid: str, sc: dict, style: dict, area: tuple[int, int], exit_kind: 
         content_h = y + 20
     elif tpl == "flow":
         nodes = mg["nodes"]
-        title_size = 76
+        title_size = fit(mg["title"], "900", 76, 40, (1000 if lay == "split" else 1080) - 120 - 24)
         body.append(f'<div class="mg-title" id="{sid}-title" style="top:0px;font-size:{title_size}px">{esc(mg["title"])}</div>')
         js.append(f'tl.fromTo("#{sid}-title",{{opacity:0,y:-30}},{{opacity:1,y:0,duration:0.5,ease:"power3.out"}},{r3(T * 0.6)});')
         y, node_h, gap = title_size + 70, 150, 64
@@ -380,8 +419,8 @@ def compose(name: str) -> dict:
     plan = load(wd / "edit_plan.json")
     tr = load(wd / "transcript.cut.json")
     track = load(wd / "head_track.json")
-    style = load(ROOT / "config" / "style.json")
-    copy_assets(wd, hf, plan, style)
+    style = effective_style(name)
+    copy_assets(wd, hf, plan, style, background_for(name, plan))
     D = r3(plan["duration"])
     scenes = scenes_of(plan)
     geo = head_geometry(track, style)
@@ -402,20 +441,27 @@ def compose(name: str) -> dict:
         asc, desc = metrics("900", size)
         cap = 0.72 * size
         baseline = g["top"] + hs["cover_ratio"] * cap + 0.1 * size
-        top_main = baseline - asc
+        main_head, _ = _ink_extent(p["text"], size)
+        top_main, lh_main = _tight_box(baseline, main_head + HT_PAD * size, asc, desc)
         sub = p.get("sub", "")
-        sub_size = fit(sub, "800", 64, 36, 900, 0.08) if sub else 0
-        sub_top = baseline - cap - 0.30 * size - sub_size * 1.45
-        words = []
-        for w in p["text"].split():
-            col = c["accent"] if w in p.get("accent", []) else "#fff"
-            words.append(f'<span style="color:{col}">{esc(w)}</span>')
+        # Two-line hook: small white kicker on top, big accent-coloured main line under it.
+        sub_size = fit(sub, "900", int(size * hs.get("sub_ratio", 0.5)), 40, hs["max_width"] / zmax) if sub else 0
+        sub_asc, sub_desc = metrics("900", sub_size) if sub else (0, 0)
+        sub_head, sub_foot = _ink_extent(sub, sub_size) if sub else (0, 0)
+        sub_head, sub_foot = sub_head + HT_PAD * sub_size, sub_foot + HT_PAD * sub_size
+        # Sub box (and its ink, e.g. the dot of Ạ) must end above the main box, which already covers the main marks.
+        sub_below = max(sub_foot, sub_head - sub_asc + sub_desc)
+        sub_baseline = top_main - hs.get("line_gap", 0.03) * size - sub_below
+        sub_top, lh_sub = _tight_box(sub_baseline, sub_head, sub_asc, sub_desc)
+        main_col, sub_col = _ht_color(hs.get("main_color", "accent"), c), _ht_color(hs.get("sub_color", "#FFFFFF"), c)
+        # The whole main line takes one colour; legacy `accent` lists are ignored.
+        words = [f'<span style="color:{main_col}">{esc(w)}</span>' for w in p["text"].split()]
         hid = f"ht{k}"
         body.append(
             f'<div id="{hid}" class="clip ht" data-start="{r3(t)}" data-duration="{r3(p["dur"])}" data-track-index="2">'
             f'<div class="ht-in" id="{hid}-in">'
-            + (f'<div class="ht-sub" style="top:{sub_top:.0f}px;font-size:{sub_size}px">{esc(sub)}</div>' if sub else "")
-            + f'<div class="ht-main" style="top:{top_main:.0f}px;font-size:{size}px;line-height:{asc + desc}px">{" ".join(words)}</div>'
+            + (f'<div class="ht-sub" style="top:{sub_top:.0f}px;font-size:{sub_size}px;line-height:{lh_sub:.0f}px;color:{sub_col}">{esc(sub)}</div>' if sub else "")
+            + f'<div class="ht-main" style="top:{top_main:.0f}px;font-size:{size}px;line-height:{lh_main:.0f}px">{" ".join(words)}</div>'
             f'</div></div>')
         js += [
             f'tl.fromTo("#{hid}-in .ht-main",{{opacity:0,y:60,scale:0.9,filter:"blur(14px)"}},{{opacity:1,y:0,scale:1,filter:"blur(0px)",duration:0.55,ease:"power3.out"}},{r3(t)});',
@@ -501,8 +547,13 @@ def compose(name: str) -> dict:
                      f'data-track-kind="graphics" data-width="{W}" data-height="{H}" style="z-index:5"></div>')
         s["mg_area"] = area
 
+    # --- illustration b-roll (full frame, above person / MG, below captions)
+    broll_html, broll_js, layout["broll"] = broll_layer(name, hf, D)
+    js += broll_js
+
     # --- captions
-    cap_doc, boxes = build_captions(tr["words"], scenes, geo, style, D)
+    words = tr["words"] if load_settings(name).get("captions", True) else []  # Studio "Phụ đề" off -> none
+    cap_doc, boxes = build_captions(words, scenes, geo, style, D)
     (hf / "compositions" / "captions.html").write_text(cap_doc, encoding="utf-8")
     layout["captions"] = boxes
 
@@ -521,15 +572,17 @@ def compose(name: str) -> dict:
     .ht {{ position:absolute; left:0; top:0; width:{W}px; height:{H}px; z-index:2; }}
     .ht-in {{ position:absolute; inset:0; }}
     .ht-main {{ position:absolute; left:0; width:100%; text-align:center; font-weight:900; letter-spacing:-0.02em; white-space:nowrap;
-      text-shadow:0 4px 0 rgba(0,0,0,.25), 0 10px 30px rgba(0,0,0,.55), 0 0 60px rgba(0,0,0,.35); }}
-    .ht-sub {{ position:absolute; left:0; width:100%; text-align:center; font-weight:800; letter-spacing:.08em; color:{c["accent"]};
-      white-space:nowrap; text-shadow:0 4px 16px rgba(0,0,0,.6); }}
+      text-shadow:6px 8px 0 rgba(0,0,0,.55), 0 10px 30px rgba(0,0,0,.45); }}
+    .ht-sub {{ position:absolute; left:0; width:100%; text-align:center; font-weight:900; letter-spacing:0; white-space:nowrap;
+      text-shadow:4px 6px 0 rgba(0,0,0,.55), 0 8px 22px rgba(0,0,0,.45); }}
     #personWrap {{ position:absolute; left:0; top:0; width:{W}px; height:{H}px; z-index:3; }}
     #person {{ position:absolute; left:0; top:0; width:{W}px; height:{H}px; object-fit:cover; }}
     .logo {{ position:absolute; width:170px; height:170px; z-index:4; }}
     .logo-in {{ width:100%; height:100%; border-radius:38px; background:#fff; display:flex; align-items:center; justify-content:center;
       box-shadow:0 14px 40px rgba(0,0,0,.45); }}
     .logo-in img {{ width:68%; height:68%; object-fit:contain; }}
+    .broll {{ position:absolute; left:0; top:0; width:{W}px; height:{H}px; z-index:5; opacity:0; overflow:hidden; }}
+    .broll video {{ width:100%; height:100%; object-fit:cover; display:block; }}
   </style>
 </head>
 <body>
@@ -544,6 +597,7 @@ def compose(name: str) -> dict:
       {chr(10).join(b for b in body if 'class="clip logo"' in b)}
     </div>
     {chr(10).join(hosts)}
+    {broll_html}
     <div id="captions" data-composition-id="captions" data-composition-src="compositions/captions.html" data-start="0"
       data-duration="{D}" data-track-index="6" data-track-kind="captions" data-width="{W}" data-height="{H}" style="z-index:6"></div>
     <audio id="voice" class="clip" data-start="0" data-duration="{D}" data-track-index="7" data-volume="1" src="assets/voice.m4a"></audio>

@@ -29,8 +29,15 @@
     "max_width": 880,
     "base_size": 190,
     "min_size": 72,
-    "cover_ratio": 0.35
+    "cover_ratio": 0.35,
+    "main_color": "accent",
+    "sub_color": "#FFFFFF",
+    "sub_ratio": 0.5,
+    "line_gap": 0.03
   },
-  "background_kenburns": [1.0, 1.06],
+  "background_kenburns": [
+    1.0,
+    1.06
+  ],
   "transition_dur": 0.45
 }

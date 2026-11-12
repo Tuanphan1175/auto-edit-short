@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import platform
 from pathlib import Path
 
 from .common import ROOT, load, name_of, save, workdir
@@ -56,7 +57,11 @@ def cmd_cut(a):
 def cmd_plan_check(a):
     from .plan import check_plan
 
-    r = check_plan(load(workdir(name_of(a.target)) / "edit_plan.json"))
+    from .settings import background_for
+
+    name = name_of(a.target)
+    plan = load(workdir(name) / "edit_plan.json")
+    r = check_plan({**plan, "background": background_for(name, plan)})
     print(("✓" if r["ok"] else "✗"), "share", r.get("share"), "max_gap", r.get("max_gap"))
     for e in r["errors"]:
         print("  ERROR", e)
@@ -114,6 +119,10 @@ def cmd_build(a):
     cmd_qa(a)
 
 
+# mlx-whisper only runs on Apple Silicon; elsewhere use PhoWhisper (transformers, CUDA if available).
+DEFAULT_ENGINE = "mlx" if platform.system() == "Darwin" and platform.machine() == "arm64" else "pho"
+
+
 def main():
     p = argparse.ArgumentParser(prog="autoedit")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -122,7 +131,7 @@ def main():
                      ("render", cmd_render), ("qa", cmd_qa), ("build", cmd_build)]:
         sp = sub.add_parser(name)
         sp.add_argument("target")
-        sp.add_argument("--engine", choices=["mlx", "pho"], default="mlx")
+        sp.add_argument("--engine", choices=["mlx", "pho"], default=DEFAULT_ENGINE)
         sp.add_argument("--quality", choices=["draft", "looks", "delivery"], default="looks")
         sp.set_defaults(fn=fn)
     a = p.parse_args()

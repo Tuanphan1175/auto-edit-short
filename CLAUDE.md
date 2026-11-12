@@ -31,6 +31,25 @@ luôn dùng `npm_config_cache=$PWD/.npm-cache` (code Python đã tự đặt bi�
 
 Mọi file trung gian nằm ở `work/<name>/`. Kết quả cuối ở `output/<name>_final.mp4`.
 
+### Chạy thử từng bước trên Windows
+
+```powershell
+.\.venv\Scripts\python.exe -m autoedit transcribe samples/short12.mp4 --engine pho
+.\.venv\Scripts\python.exe -m autoedit cutlist short12
+# Sau khi người dùng duyệt cut_list.json:
+.\.venv\Scripts\python.exe -m autoedit cut short12 --engine pho
+```
+
+Claude Code đọc transcript và xem từng đề xuất giữ/bỏ. Gửi `cut_list.json` cho người dùng
+duyệt trước khi gọi lệnh `cut`. Trường `keep` là bản xem trước. Khi chạy `cut`, CLI tính lại
+các đoạn giữ từ những cut đang bật và nhận dạng lại lời thoại trong `cut.mp4`.
+
+Mỗi bước dùng cùng một video mẫu. Gửi video đã cắt và transcript mới sau bước 1, kế hoạch
+sự kiện sau bước 2, bản dựng có caption sau bước 3, và video cuối kèm kết quả QA sau bước 4.
+Chờ phản hồi của người dùng trước khi chuyển bước. Ở bước 4, xem khung hình quanh từng
+điểm cắt, nghe đoạn nối và kiểm tra vị trí caption. Khi phát hiện lỗi, sửa dữ liệu hoặc cấu
+hình ở bước gây lỗi, render lại và kiểm tra lại đầu ra.
+
 ## Cấu trúc thư mục
 
 ```
@@ -138,9 +157,27 @@ Thời gian luôn tính bằng **giây (float)**. Toạ độ theo canvas **1080
 - `flow` {title, nodes:[{label, sub, logos?:[...], at}] (≤4)} — sơ đồ dọc có mũi tên (hợp fullscreen)
 - `strike` {kicker, title (1 dòng), stamp, strike_at, sub, sub_at} — gạch bỏ + con dấu
 - `title` {title, sub} · `stat` {value, label}
-`head_text.params.accent`: danh sách từ tô vàng. `sub` là dòng kicker nằm **phía trên** dòng chính → viết sao cho đọc
-từ trên xuống thành câu (vd. sub "APP EDIT VIDEO GIÚP" + text "TIẾT KIỆM 90%").
+Head text = hook 2 dòng: `sub` là dòng **trên, chữ trắng nhỏ** (~½ cỡ), `text` là dòng **dưới, chữ vàng to** → viết sao cho
+đọc từ trên xuống thành câu (vd. sub "LÀM LẠI TỪ SỐ 0" + text "10 BƯỚC"; sub "APP EDIT VIDEO GIÚP" + text "TIẾT KIỆM 90%").
+Hook mở đầu nên luôn có `sub`. Màu chỉnh ở `config/style.json` → `head_text.main_color` / `sub_color` (`accent` cũ bị bỏ qua).
 Chữ trong motion graphic phải **giải thích đúng nội dung đang nói** trong khoảng thời gian của scene.
+
+### Studio: nền, phong cách, B-roll (tùy chọn, ghi bởi Studio)
+
+- `work/<name>/settings.json` `{"background": "media/backgrounds/x.jpg", "style_preset": "<slug>"}` — nền chọn ở Studio
+  thắng `edit_plan.background`; `style_preset` trộn `config/styles/<slug>.json` lên `config/style.json`.
+- `config/styles/<slug>.json` (+ `<slug>.plan.json` = kịch bản mẫu) — phong cách đã lưu; đạo diễn học nhịp/kiểu dựng
+  từ plan mẫu, không chép nội dung.
+- `work/<name>/broll.json` `{"items":[{"id","t","dur","src_start","file","prompt","line","enabled"}]}` — clip minh hoạ
+  toàn màn hình (z 5, dưới caption), chỉ đặt trong scene `normal`, không trùng `head_text`. `file` lấy từ kho
+  (`media/broll/`, thư mục Google Drive for desktop khai trong `config/studio.json`) hoặc tạo bằng SnapGen Veo
+  (`autoedit/snapgen.py`, key `SNAPGENAI_API_KEY` trong `.env` — không in, không commit; 4 credit/clip, hỏi trước khi tạo).
+- Kho trên máy (`autoedit/library.py`, lưu ở `config/studio.json` → `library.broll|music|sfx`): thư mục hoặc file `.zip`
+  (giải nén vào `.tmp/libcache/`); để trống = `media/broll|music|sfx`. Studio ghi thêm vào `settings.json`:
+  `captions` (false = không phụ đề), `audio_fx` (true = nhạc nền ducking + SFX whoosh ở mỗi chuyển cảnh/B-roll,
+  trộn trong `render.py` trước loudnorm), `audio_seed` (đổi khi "Làm lại phần: Âm thanh").
+- "Làm lại edit" (`POST /api/redo`): Cắt → Claude rà `cut_list.json` rồi cắt + đạo diễn lại; Head text/Zoom → đạo diễn
+  lại phần đó; B-roll → gợi ý lại từ kho; Âm thanh → chọn nhạc/SFX khác; Nền → đổi ảnh nền; rồi dựng lại.
 
 ---
 
